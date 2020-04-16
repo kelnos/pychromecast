@@ -524,6 +524,27 @@ class MediaController(BaseController):
         Docs:
         https://developers.google.com/cast/docs/reference/messages#MediaData
         """
+        if (isinstance(subtitles, str)
+                and isinstance(subtitles_lang, str)
+                and isinstance(subtitles_mime, str)
+                and isinstance(subtitle_id, int)):
+            subtitles = [subtitles]
+            subtitles_lang = [subtitles_lang]
+            subtitles_mime = [subtitles_mime]
+            subtitle_id = [subtitle_id]
+        elif (isinstance(subtitles, list)
+                and isinstance(subtitles_lang, list)
+                and isinstance(subtitle_id, list)):
+            if isinstance(subtitles_mime, str):
+                subtitles_mime = [subtitles_mime for _ in range(4)]
+            count = len(subtitles)
+            if (count != len(subtitles_lang)
+                    or count != len(subtitle_id)
+                    or count != len(subtitles_mime)):
+                raise ValueError("Subtitles parameters must either be strings or lists of the same length")
+        else:
+            raise ValueError("Subtitles parameters must be either strings or lists")
+
         # pylint: disable=too-many-locals
         def app_launched_callback():
             """Plays media after chromecast has switched to requested app."""
@@ -584,25 +605,26 @@ class MediaController(BaseController):
                 msg["media"]["metadata"]["images"] = []
 
             msg["media"]["metadata"]["images"].append({"url": thumb})
-        if subtitles:
-            sub_msg = [
-                {
-                    "trackId": subtitle_id,
-                    "trackContentId": subtitles,
-                    "language": subtitles_lang,
+        if len(subtitles) > 0:
+            def make_subtitle(subtitle):
+                return {
+                    "trackId": subtitle[1],
+                    "trackContentId": subtitle[0],
+                    "language": subtitle[2],
                     "subtype": "SUBTITLES",
                     "type": "TEXT",
-                    "trackContentType": subtitles_mime,
-                    "name": "{} - {} Subtitle".format(subtitles_lang, subtitle_id),
+                    "trackContentType": subtitle[3],
+                    "name": "{} - {} Subtitle".format(subtitle[2], subtitle[1]),
                 }
-            ]
+
+            sub_msg = list(map(make_subtitle, zip(subtitles, subtitle_id, subtitles_lang, subtitles_mime)))
             msg["media"]["tracks"] = sub_msg
             msg["media"]["textTrackStyle"] = {
                 "backgroundColor": "#FFFFFF00",
                 "edgeType": "OUTLINE",
                 "edgeColor": "#000000FF",
             }
-            msg["activeTrackIds"] = [subtitle_id]
+            msg["activeTrackIds"] = [subtitle_id[0]]
         self.send_message(msg, inc_session_id=True)
 
     def tear_down(self):
